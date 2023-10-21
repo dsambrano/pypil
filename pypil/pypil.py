@@ -60,7 +60,7 @@ class pypil(object):
             self.content = f.readlines()
             # detect whether the eyelink rate was stored in the first 200 lines (an arbitrary number)
             rate_line = [x for x in self.content[:200] if 'RECCFG CR ' in x] 
-            baseline_line = [x for x in self.content if 'baseline_onset' in x]
+            baseline_line = [x for x in self.content if self.start_baseline_str in x]
             if not rate_line:
                 rate_line = [x for x in self.content if 'RECCFG CR ' in x]
             if rate_line:
@@ -254,7 +254,12 @@ class pypil(object):
         self.indclude_pupil = True
         #self.merged_data.corrected_pupil = self.merged_data.inter_pupil / self.merged_data.inter_pupil.mean()
         self.merged_data.to_csv(os.path.join(self.data_dir, '{}_merged_pupil_RAW.csv'.format(self.subjectid)), index=False)
-
+        
+        #create file with only relevant events
+        filt_relevant_events = (self.merged_data['event'].isin(self.relevant_list))
+        self.merged_data_relevant = self.merged_data[filt_relevant_events]
+        self.merged_data_relevant.to_csv(os.path.join(self.data_dir, '{}_merged_pupil_RAW_relevant.csv'.format(self.subjectid)), index=False)
+        
     def prepare_phase(self, overwrite=False):
         '''
         Read in, organize, create pd.DataFrames pupil, messages, and a merged datasets.
@@ -933,12 +938,6 @@ class pypil(object):
         self.merged_data_first_row = self.merged_data.groupby(['identifier']).head(1).\
             merge(self.task_df, on=['ID','block','trial','identifier'], how='outer')
         self.drop_redundant_column(for_first_row=True)
-            
-    def remove_irrelevant_events(self):
-        '''
-        remove pupil data related to undesirable events (stored in self.irrelevant_events)
-        '''
-        self.merged_data = self.merged_data.loc[self.merged_data.event.isin(self.relevant_list),:]
  
     def drop_redundant_column(self, for_first_row=False):
         '''
