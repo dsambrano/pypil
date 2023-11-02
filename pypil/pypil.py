@@ -47,6 +47,16 @@ class pypil(object):
         self.redundant_col = ['index','dots', 'time_step', 'inter_pupil', 'valid_time', \
             'smoothed_interp_pupil']
         self.redundant_col_first_row = ['x','y','pupil','event','is_valid','smoothed_interp_pupil_corrected','inter_pupil_corrected']
+        self.event_str = 'event'
+        self.block_str = 'BLOCKID'
+        self.trial_str = 'TRIALID'
+        self.number_of_columns_for_message = [
+                                          'MSG', 'time', 'BLOCKID_text', 'BLOCKID', 'TRIALID_text', 'TRIALID', 'event', 'action', \
+                                              'ph1', 'ph2', 'ph3', 'ph4', 'ph5', 'ph6', 'ph7', 'ph8']
+        self.separation_rule = ' |\t'
+        self.start_fixation_str = 'fixation_onset'
+        self.merged_data_columns = ['ID', 'block', 'trial', 'event', 'time_step']
+        self.time_str = 'time'
             
 
     def __eq__(self, other) : 
@@ -114,15 +124,15 @@ class pypil(object):
 
         for line in self.messages:
             # add blockid and trialid
-            if not 'BLOCKID' in line:
+            if not self.block_str in line:
                 split_strings = line.split()
-                if not 'TRIALID' in line:
+                if not self.trial_str in line:
                     split_strings.insert(2, 'BLOCKID 999 TRIALID 999')
                 else:
                     split_strings.insert(2, 'BLOCKID 999')
                 line = ' '.join(split_strings)
             else:
-                if not 'TRIALID' in line:
+                if not self.trial_str in line:
                     split_strings = line.split()
                     split_strings.insert(4, 'TRIALID 999')
                     line = ' '.join(split_strings)
@@ -133,8 +143,8 @@ class pypil(object):
                                               'ph1', 'ph2', 'ph3', 'ph4', 'ph5', 'ph6', 'ph7', 'ph8'], # placeholder to have enough entries so that it wont throw errors
                                           na_values=['nan'], sep=' |\t', engine='python')
         # replace 999 with NaN
-        self.message_data['BLOCKID'] = self.message_data['BLOCKID'].replace(999, np.nan)
-        self.message_data['TRIALID'] = self.message_data['TRIALID'].replace(999, np.nan)
+        self.message_data[self.block_str] = self.message_data[self.block_str].replace(999, np.nan)
+        self.message_data[self.trial_str] = self.message_data[self.trial_str].replace(999, np.nan)
         self.message_data.to_csv(os.path.join(self.data_dir, '{}_message_RAW.csv'.format(self.subjectid)), index=False)
 
         
@@ -199,7 +209,7 @@ class pypil(object):
         except:
             raise Exception('There is no baseline_pupil_data in the current folder. Please double check and/or rerun the pipeline.')
            
-    def mess_pupil_merge2(self):
+    def mess_pupil_merge(self):
         '''
         merge pupil and message data
         Note: the name has '2' in due to that in an early version we want to distinguish this file with Deshawn's version where deep/shallow copy was not distinguished
@@ -207,22 +217,22 @@ class pypil(object):
 
         print('This will take some time...')
         
-        self.message_data_trial_start = self.message_data[self.message_data.event == 'fixation_onset']
+        self.message_data_trial_start = self.message_data[self.message_data.event == self.start_fixation_str]
         self.message_data_trial_start = self.message_data_trial_start.append(self.message_data.tail(1)) # append will be deprecated in the future
 
         # generate merged data file with same rows as the puil data (not fillin the pupil data yet)
         # in my data, I also did not put in the behavioral data / task attribute here yet.
-        self.merged_data = pd.DataFrame(columns=['ID', 'block', 'trial', 'event', 'time_step'], 
+        self.merged_data = pd.DataFrame(columns=self.merged_data_columns, 
                                         index=self.pupil_data.index)
         # fill in the subjectid                                    
         self.merged_data.ID.iloc[0] = self.subjectid
 
         for idx in range(self.message_data_trial_start.shape[0]-1):
             # get block and trial info from message data
-            curr_b, curr_t = self.message_data_trial_start.iloc[idx][['BLOCKID','TRIALID']]
+            curr_b, curr_t = self.message_data_trial_start.iloc[idx][[self.block_str, self.trial_str]]
             trial_time_range = \
-                [self.message_data_trial_start.iloc[idx]['time'], \
-                    self.message_data_trial_start.iloc[idx+1]['time']]
+                [self.message_data_trial_start.iloc[idx][self.time_str], \
+                    self.message_data_trial_start.iloc[idx+1][self.time_str]]
             trial_idx_range = \
                 pd.RangeIndex(self.pupil_data.time.sub(trial_time_range[0]).abs().idxmin(),\
                     self.pupil_data.time.sub(trial_time_range[1]).abs().idxmin())
@@ -256,7 +266,7 @@ class pypil(object):
         self.merged_data.to_csv(os.path.join(self.data_dir, '{}_merged_pupil_RAW.csv'.format(self.subjectid)), index=False)
         
         #create file with only relevant events
-        filt_relevant_events = (self.merged_data['event'].isin(self.relevant_list))
+        filt_relevant_events = (self.merged_data[self.event_str].isin(self.relevant_list))
         self.merged_data_relevant = self.merged_data[filt_relevant_events]
         self.merged_data_relevant.to_csv(os.path.join(self.data_dir, '{}_merged_pupil_RAW_relevant.csv'.format(self.subjectid)), index=False)
         
@@ -296,7 +306,7 @@ class pypil(object):
                 print('{} data were OVERWRITTEN'.format(self.subjectid))
             else:
                 print('{} data were CREATED'.format(self.subjectid))
-            self.mess_pupil_merge2()
+            self.mess_pupil_merge()
             # Haoxue: I believe that downsample is mostly because we want to save computational resource. currently move it down mess_puipl_merge2 and see how it goes.
             self.down_sample()
         else:
@@ -538,6 +548,11 @@ class pypil(object):
         self.interp_settings = interp_settings
 
     def _remove_out_of_bounds(self):
+        
+        '''
+        Removes pupil sizes which are outside of the specified minimum and maximum pupil sizes.
+        '''
+        
         min_val = self.filter_settings['pupil_diameter_min']
         max_val = self.filter_settings['pupil_diameter_max']
 
@@ -678,68 +693,6 @@ class pypil(object):
                 # Reject samples too near a gap
                 self.merged_data.is_valid = self.merged_data.is_valid & ~near_gap
 
-    def _mad_deviation_filter(self):
-        '''
-        Filters pupil diameter timeseries based on the deviation fromt a smooth trendline.
-
-        Currently does not support upsampling. Interpolation will occur at the same time scale
-        of the self.merged_data.time pandas.Series.
-        '''
-        # [isValid_Running,filtData] = madDeviationFilter(t_ms,dia,isValid_In,filtSettings)
-
-        # % madDeviationFilter filters a diameter timeseries based on the deviation
-        # % from a smooth trendline.
-        # %
-        # %--------------------------------------------------------------------------
-
-        # Get Relevant Settings
-        n_passes = self.filter_settings['residuals_filter_passes']
-
-        # If an when I incorporate upsampling this is were it will occur.
-        # time_interp = np.arange(self.merged_data.time.iloc[0], self.merged_data.time.iloc[-1],
-        #                         (1000 / self.filter_settings['residuals_filter_interpFs']))
-
-        assert (self.merged_data.is_valid.sum() > 3  # Arbitrary got from Kret & Sjak-Shie (2018)
-                ), "There needs to be greater than 3 valid time points to interpolate."
-
-        self.smoothed_per_pass = pd.DataFrame(columns=['{}{}'.format(y, x) for x in range(n_passes)
-                                                       for y in ['resid', 'smooth', 'is_valid']],
-                                              index=self.merged_data.time.index)
-        is_valid_loop = self.merged_data.is_valid
-        is_done = False
-        for pass_ind in range(n_passes):
-
-            # If the last filter did not have any effect, neither will any of the others
-            if is_done:
-                break
-
-            # Tracking Valid trials
-            is_valid_start = is_valid_loop
-
-            # Calculate and Smooth baseline and deviation
-            self._deviation_calc(pass_ind)
-
-            # Calculate MAD stats
-            _, thresh = self._mad_calc(self.smoothed_per_pass['resid{}'.format(pass_ind)])
-
-            # Remove outliers and remove isolated rejection filter
-            is_valid_loop = (self.smoothed_per_pass['resid{}'.format(pass_ind)] <= thresh) & self.merged_data.is_valid
-            self.valid_time = self.merged_data.time[is_valid_loop]
-            self._remove_loners()
-            is_valid_loop = self.merged_data.is_valid
-
-            # Log loop vars
-            self.smoothed_per_pass['is_valid{}'.format(pass_ind)] = is_valid_loop
-
-            # Determine if this filter step had an effect
-            if pass_ind and all(is_valid_start == is_valid_loop):  # Can't be first pass e.g., pass_ind = 0
-                # Copy the current results to the other columns
-                for ind in range(pass_ind + 1, n_passes):
-                    self.smoothed_per_pass['is_valid{}'.format(ind)] = self.smoothed_per_pass['is_valid{}'.format(ind - 1)]
-                    self.smoothed_per_pass['smooth{}'.format(ind)] = self.smoothed_per_pass['smooth{}'.format(ind - 1)]
-                    self.smoothed_per_pass['resid{}'.format(ind)] = self.smoothed_per_pass['resid{}'.format(ind - 1)]
-
-                is_done = True
     
     def _mad_deviation_filter2(self):
         '''
@@ -1066,7 +1019,7 @@ class pypil(object):
  
     def choice_msgpupil_merge(self, task_df=None, overwrite=None):
         '''
-        Merge task and choice data with pupil and msg (pupil and msg should be merged in mess_pupil_merge2)
+        Merge task and choice data with pupil and msg (pupil and msg should be merged in mess_pupil_merge)
         Run it after preprocess, filter and valid has all been done
         Only run it when task_df is passed in
         '''
