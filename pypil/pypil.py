@@ -57,7 +57,7 @@ class pypil(object):
         self.start_fixation_str = 'fixation_onset'
         self.merged_data_columns = ['ID', 'block', 'trial', 'event', 'time_step']
         self.time_str = 'time'
-            
+        self.fraction_of_sampling_rate = 0.5
 
     def __eq__(self, other) : 
             return (self.__dict__ == other.__dict__).all()
@@ -138,9 +138,7 @@ class pypil(object):
                     line = ' '.join(split_strings)
             self.message_str.append(line)
 
-        self.message_data = pd.read_csv(StringIO('\n'.join(self.message_str)), names=[
-                                          'MSG', 'time', 'BLOCKID_text', 'BLOCKID', 'TRIALID_text', 'TRIALID', 'event', 'action', \
-                                              'ph1', 'ph2', 'ph3', 'ph4', 'ph5', 'ph6', 'ph7', 'ph8'], # placeholder to have enough entries so that it wont throw errors
+        self.message_data = pd.read_csv(StringIO('\n'.join(self.message_str)), names=self.number_of_columns_for_message, # placeholder to have enough entries so that it wont throw errors
                                           na_values=['nan'], sep=' |\t', engine='python')
         # replace 999 with NaN
         self.message_data[self.block_str] = self.message_data[self.block_str].replace(999, np.nan)
@@ -824,7 +822,7 @@ class pypil(object):
         # Set samples that are really close to the raw samples as
         # having no gap (scale the closeness with the sampling freq.).
         # In this case it is set to half the sampling interval:
-        not_touching_you_ms = .5 * 1000 / self.interp_settings['interp_upsampling_freq'] # question: is this the original sampling frequency, or is this the sampling frequency that has already been reduced?
+        not_touching_you_ms = self.fraction_of_sampling_rate * 1000 / self.interp_settings['interp_upsampling_freq'] # question: is this the original sampling frequency, or is this the sampling frequency that has already been reduced?
 
         # Haoxue: this part is a little hard to understand
         binz = self.merged_data.time[self.merged_data.is_valid].to_numpy()[:, None] + np.array([-1, 1]) * not_touching_you_ms
@@ -840,8 +838,8 @@ class pypil(object):
         self.merged_data.smoothed_interp_pupil.iloc[gaps_ms > self.interp_settings['interp_max_gap']] = np.NaN
 
         # The division was removed according to the pupil analysis techniques illustrated by Dave and Linda. 
-        self.merged_data['smoothed_interp_pupil_corrected'] = self.merged_data.smoothed_interp_pupil  # / self.merged_data.smoothed_interp_pupil.mean()
-        self.merged_data['inter_pupil_corrected'] = self.merged_data.inter_pupil  # / self.merged_data.inter_pupil.mean()
+         # / self.merged_data.smoothed_interp_pupil.mean()
+         # / self.merged_data.inter_pupil.mean()
         self.include_pupil = True
 
         if for_baseline:
@@ -936,7 +934,7 @@ class pypil(object):
        
     def avg_within_timewindow(self, \
         timestamp_col='timestamp_locked_at_stimulus_pre_with_fixation_onset',\
-        y_col='remove_baseline_smoothed_interp_pupil_corrected',\
+        y_col='remove_baseline_smoothed_interp_pupil',\
         timestamp_range=[-1000, 0],\
         new_x_col='avg'):
         '''
@@ -945,7 +943,7 @@ class pypil(object):
 
         def df_avg_within_timewindow(df, \
         timestamp_col='timestamp_locked_at_stimulus_pre_with_fixation_onset',\
-        y_col='remove_baseline_smoothed_interp_pupil_corrected',\
+        y_col='remove_baseline_smoothed_interp_pupil',\
         timestamp_range=[-1000, 0]):
             '''
             function inside apply to calculate avg within a timewindow
@@ -975,8 +973,8 @@ class pypil(object):
         self.merged_data_first_row = self.merged_data_first_row.merge(output, on='identifier')
 
     def baseline_correct(self, baseline_col='trial_baseline', \
-        pupil_col='smoothed_interp_pupil_corrected',\
-        new_x_col='remove_baseline_smoothed_interp_pupil_corrected'):
+        pupil_col='smoothed_interp_pupil',\
+        new_x_col='remove_baseline_smoothed_interp_pupil'):
         '''
         use trial baseline (saved in merged_data_first_trial) to correct activities within a trial (merged_data)
         the current function is a simple one
