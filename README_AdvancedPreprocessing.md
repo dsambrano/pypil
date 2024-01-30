@@ -24,6 +24,7 @@ Before adding the unique identifier, it makes sure that the merged and task data
 
 ## add_timestamp(self)
 Calculates timestamp based on column event for each trial
+Disclaimer: If each block/trial lacks at least one event, then there may not be column names for each event. 
 
 ## avg_within_timewindow(self, timestamp_col='X', y_col='Y', timestamp_range=[q,r], new_x_col='avg')
 Calculates the specified y_col average within the specified timestamp_range for the specified timestamp_col. 
@@ -34,14 +35,6 @@ When running:
 
 ## percent_miss(self, new_x_col='percent_miss')
 Calculates the percentage of missing data for each trial based on whether pupil size is zero
-
-## baseline_correct(self, baseline_col='X', pupil_col='Y', new_x_col='remove_baseline_Y')
-Applicable only when there is baseline data
-Uses the trial baseline (saved in merged_data_first_trial) to correct activities within a trial in the merged data file
-
-When running:
-1. baseline_col should be a string which specifies a column in the merged_data_first_trial dataframe
-2. pupil_col should be a string which specifies a column in the merged data file
 
 ## write_merged_and_task(self, overwrite=False)
 Writes preprocessed merged data, merged_data_first_row, and task_df
